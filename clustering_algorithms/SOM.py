@@ -8,8 +8,7 @@ from sklearn.preprocessing import StandardScaler, OrdinalEncoder
 from sklearn.compose import ColumnTransformer
 from icecream import ic
 
-df = pd.read_excel("Filtered_Book2_Consecutive.xlsx")
-
+df = pd.read_excel(r"../data/median_imputed.xlsx")
 ordinal_cols = ["Học lực", "Hạnh kiểm", "Danh hiệu"]
 nominal_cols = ["GVCN"]
 numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "SSL"]

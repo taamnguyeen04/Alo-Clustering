@@ -8,8 +8,7 @@ from sklearn.decomposition import PCA
 from sklearn.ensemble import IsolationForest
 from icecream import ic
 
-df = pd.read_excel("Filtered_Book2_Consecutive.xlsx")
-
+df = pd.read_excel(r"../data/median_imputed.xlsx")
 ordinal_cols = ["Học lực", "Hạnh kiểm", "Danh hiệu"]
 nominal_cols = ["GVCN"]
 numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "SSL"]
@@ -55,7 +54,7 @@ anomaly_pred = iso_forest.fit_predict(X_reduced)
 
 df["Anomaly"] = anomaly_pred
 df["Anomaly_Label"] = df["Anomaly"].map({1: "Bình thường", -1: "Bất thường"})
-ic(df[["Họ và tên", "Anomaly_Label"]])
+# ic(df[["Họ và tên", "Anomaly_Label"]])
 
 plt.figure(figsize=(8, 6))
 plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=anomaly_pred, cmap="coolwarm", s=50)

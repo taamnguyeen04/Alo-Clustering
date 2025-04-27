@@ -10,8 +10,7 @@ from icecream import ic
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 
-df = pd.read_excel(r"C:\Users\tam\Documents\Data\new_student\student new\median_imputed.xlsx")
-
+df = pd.read_excel(r"../data/knn_imputed.xlsx")
 ordinal_cols = ["Học lực", "Hạnh kiểm", "Danh hiệu"]
 nominal_cols = ["GVCN"]
 numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "SSL"]
@@ -68,9 +67,9 @@ if len(set(labels_valid)) >= 2:
     calinski = calinski_harabasz_score(X_valid, labels_valid)
     davies = davies_bouldin_score(X_valid, labels_valid)
 
-    ic(silhouette)
-    ic(calinski)
-    ic(davies)
+    print(f"{silhouette:.4f}")
+    print(f"{calinski:.2f}")
+    print(f"{davies:.4f}")
 
 # plt.figure(figsize=(8, 6))
 # scatter = plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=clusters, cmap='viridis', s=50)
