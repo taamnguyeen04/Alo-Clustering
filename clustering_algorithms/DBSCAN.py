@@ -10,7 +10,7 @@ from icecream import ic
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 
-df = pd.read_excel(r"../data/knn_imputed.xlsx")
+df = pd.read_excel(r"../data/mode_imputed.xlsx")
 ordinal_cols = ["Học lực", "Hạnh kiểm", "Danh hiệu"]
 nominal_cols = ["GVCN"]
 numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "SSL"]

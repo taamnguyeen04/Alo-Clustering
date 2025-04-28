@@ -142,12 +142,12 @@ def train():
     lr = 1e-5
     num_epochs = 50
     embedding_dim = 64
-    out_path = "out_knn_imputed"
+    out_path = "out_mode_imputed"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(out_path, exist_ok=True)
     writer = SummaryWriter(log_dir=os.path.join(out_path, "logs"))
 
-    train_dataset, test_dataset = load_and_preprocess_data(path=r"data/knn_imputed.xlsx", split=True)
+    train_dataset, test_dataset = load_and_preprocess_data(path=r"data/mode_imputed.xlsx", split=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
