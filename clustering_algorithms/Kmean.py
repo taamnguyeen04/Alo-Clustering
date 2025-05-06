@@ -7,13 +7,15 @@ from sklearn.compose import ColumnTransformer
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from icecream import ic
+from sklearn.manifold import TSNE
+
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 
 
-df = pd.read_excel(r"../data/mode_imputed.xlsx")
+df = pd.read_excel(r"../data/median_imputed.xlsx")
 ordinal_cols = ["Học lực", "Hạnh kiểm", "Danh hiệu"]
 nominal_cols = ["GVCN"]
-numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "SSL"]
+numerical_cols = ["Toán", "Lý", "Hóa", "Sinh", "Tin", "Văn", "Sử", "Địa", "Ng.ngữ", "GDCD", "C.nghệ", "Điểm TK", "K", "P", "Xếp hạng", "SSL"]
 
 ordinal_mappings = [
     ['không xác định', 'kém', 'yếu', 'trung bình', 'khá', 'giỏi'],
@@ -46,7 +48,7 @@ X = df[numerical_cols + ordinal_cols + nominal_cols]
 
 X_processed = preprocessor.fit_transform(X)
 
-pca = PCA(n_components=2)
+pca = PCA(n_components=20)
 X_reduced = pca.fit_transform(X_processed)
 
 # print("Dữ liệu gốc:", X_processed.shape)
@@ -65,11 +67,28 @@ print(f"{silhouette:.4f}")
 print(f"{calinski:.2f}")
 print(f"{davies:.4f}")
 
-# plt.figure(figsize=(8, 6))
-# plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=clusters, cmap='viridis', s=50)
-# plt.title("KMeans Clustering Sau PCA")
-# plt.xlabel("PCA 1")
-# plt.ylabel("PCA 2")
-# plt.colorbar(label='Cluster')
-# plt.grid(True)
-# plt.show()
+# --- t-SNE ---
+tsne = TSNE(n_components=2, perplexity=30, random_state=42)
+X_tsne = tsne.fit_transform(X_processed)
+
+# --- Vẽ biểu đồ PCA ---
+plt.figure(figsize=(14, 6))
+
+plt.subplot(1, 2, 1)
+plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=clusters, cmap='viridis', s=50)
+plt.title("Clustering by Kmean Model (PCA Reduced)")
+plt.xlabel("PCA 1")
+plt.ylabel("PCA 2")
+plt.grid(True)
+
+# --- Vẽ biểu đồ t-SNE ---
+plt.subplot(1, 2, 2)
+plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=clusters, cmap='viridis', s=50)
+plt.title("Clustering by Kmean Model (t-SNE Reduced)")
+plt.xlabel("t-SNE 1")
+plt.ylabel("t-SNE 2")
+plt.grid(True)
+
+plt.colorbar(label='Cluster', ax=plt.gca(), shrink=0.75)
+plt.tight_layout()
+plt.show()

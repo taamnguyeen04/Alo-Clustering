@@ -34,26 +34,59 @@ def load_checkpoint(path, encoder, clustering_head, optimizer, device):
         return checkpoint['epoch'] + 1
     return 0
 
+# def contrastive_loss(z1, z2, temperature=0.5):
+#     z1 = F.normalize(z1, dim=1)
+#     z2 = F.normalize(z2, dim=1)
+#
+#     batch_size = z1.size(0)
+#     representations = torch.cat([z1, z2], dim=0)
+#     similarity_matrix = torch.matmul(representations, representations.T)
+#
+#     mask = torch.eye(2 * batch_size, dtype=torch.bool, device=z1.device)
+#     similarity_matrix.masked_fill_(mask, -1e9)
+#
+#     positive_sim = torch.sum(z1 * z2, dim=1)
+#     positives = torch.cat([positive_sim, positive_sim], dim=0)
+#
+#     logits = similarity_matrix / temperature
+#     labels = torch.arange(batch_size, device=z1.device)
+#     labels = torch.cat([labels + batch_size, labels], dim=0)
+#
+#     loss = F.cross_entropy(logits, labels)
+#     return loss
+
 def contrastive_loss(z1, z2, temperature=0.5):
     z1 = F.normalize(z1, dim=1)
     z2 = F.normalize(z2, dim=1)
 
+    representations = torch.cat([z1, z2], dim=0)  # [2N, D]
+    similarity_matrix = torch.matmul(representations, representations.T)  # [2N, 2N]
+    similarity_matrix /= temperature
+
     batch_size = z1.size(0)
-    representations = torch.cat([z1, z2], dim=0)
-    similarity_matrix = torch.matmul(representations, representations.T)
+    labels = torch.cat([torch.arange(batch_size) for _ in range(2)], dim=0)
+    labels = labels.to(z1.device)
 
-    mask = torch.eye(2 * batch_size, dtype=torch.bool, device=z1.device)
-    similarity_matrix.masked_fill_(mask, -1e9)
+    # mask để loại chính nó (positive trùng chính anchor) khỏi negative
+    logits_mask = ~torch.eye(2 * batch_size, dtype=torch.bool).to(z1.device)
 
-    positive_sim = torch.sum(z1 * z2, dim=1)
-    positives = torch.cat([positive_sim, positive_sim], dim=0)
+    positives_mask = (labels.unsqueeze(0) == labels.unsqueeze(1)) & logits_mask
+    negatives_mask = (labels.unsqueeze(0) != labels.unsqueeze(1)) & logits_mask
 
-    logits = similarity_matrix / temperature
-    labels = torch.arange(batch_size, device=z1.device)
-    labels = torch.cat([labels + batch_size, labels], dim=0)
+    logits = similarity_matrix
 
-    loss = F.cross_entropy(logits, labels)
+    # Lấy positive logits
+    pos_logits = logits[positives_mask].view(2 * batch_size, -1)
+
+    # Hard negatives: chọn top-K similarities lớn nhất trong negatives
+    num_hard_negatives = 5
+    hard_negatives = torch.topk(logits.masked_fill(~negatives_mask, -1e9), k=num_hard_negatives, dim=1)[0]
+    exp_pos = torch.exp(pos_logits)
+    exp_neg = torch.exp(hard_negatives).sum(dim=1, keepdim=True)
+
+    loss = -torch.log(exp_pos / (exp_pos + exp_neg + 1e-8)).mean()
     return loss
+
 
 def clustering_loss(cluster_logits):
     p = F.softmax(cluster_logits, dim=1)
@@ -84,19 +117,16 @@ def cluster_separation_loss(cluster_centers):
             loss += 1.0 / (dist + 1e-6)
     return loss
 
-def total_loss_fn(z1, z2, cluster_logits, alpha=1.0, beta=1.0, gamma=1.0, delta=1.0):
+def total_loss_fn(z1, z2, cluster_logits, alpha=0.3, beta=1.0, gamma=1.0, delta=0.5):
     loss_contrastive = contrastive_loss(z1, z2)
     loss_cluster = clustering_loss(cluster_logits)
-
     batch_size = z1.size(0)
     cluster_logits_z1 = cluster_logits[:batch_size]
     cluster_assignments = cluster_logits_z1.argmax(dim=1)
-
     compact_loss, cluster_centers = cluster_compactness_loss(z1, cluster_assignments, num_clusters=2)
     separation_loss = cluster_separation_loss(cluster_centers)
-
     total = alpha * loss_contrastive + beta * loss_cluster + gamma * compact_loss + delta * separation_loss
-    return total
+    return total, loss_contrastive, loss_cluster, compact_loss, separation_loss
 
 def augment(x, noise_scale=0.1, dropout_prob=0.1, scale_jitter=0.05):
     if noise_scale > 0:
@@ -142,12 +172,12 @@ def train():
     lr = 1e-5
     num_epochs = 50
     embedding_dim = 64
-    out_path = "out_mode_imputed"
+    out_path = "out_median_imputed"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     os.makedirs(out_path, exist_ok=True)
     writer = SummaryWriter(log_dir=os.path.join(out_path, "logs"))
 
-    train_dataset, test_dataset = load_and_preprocess_data(path=r"data/mode_imputed.xlsx", split=True)
+    train_dataset, test_dataset = load_and_preprocess_data(path=r"data/median_imputed.xlsx", split=True)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
@@ -159,7 +189,7 @@ def train():
     start_epoch = load_checkpoint(os.path.join(out_path, 'checkpoint.pt'), encoder, clustering_head, optimizer, device)
 
     best_silhouette = -1
-    patience = 5
+    patience = 8
     wait = 0
     noise_scale = 0.1
 
@@ -178,13 +208,12 @@ def train():
             z_all = torch.cat([z1, z2], dim=0)
             cluster_logits = clustering_head(z_all)
 
-            loss = total_loss_fn(z1, z2, cluster_logits)
+            total_loss, loss_contrastive, loss_cluster, compact_loss, separation_loss = total_loss_fn(z1, z2, cluster_logits)
 
             optimizer.zero_grad()
-            loss.backward()
+            total_loss.backward()
             optimizer.step()
-
-            total_loss_val += loss.item()
+            total_loss_val += total_loss.item()
 
         print(f"Epoch {epoch} | Loss: {total_loss_val / len(train_dataloader):.4f}")
 
@@ -209,6 +238,11 @@ def train():
 
         print(f"Epoch {epoch} | Silhouette: {silhouette:.4f} | Calinski: {calinski:.2f} | Davies: {davies:.4f}")
 
+        writer.add_scalar('Loss/Total', total_loss_val / len(train_dataloader), epoch)
+        writer.add_scalar('Loss/Contrastive', loss_contrastive.item(), epoch)
+        writer.add_scalar('Loss/Cluster', loss_cluster.item(), epoch)
+        writer.add_scalar('Loss/Compactness', compact_loss.item(), epoch)
+        writer.add_scalar('Loss/Separation', separation_loss.item(), epoch)
         writer.add_scalar('Metrics/Silhouette', silhouette, epoch)
         writer.add_scalar('Metrics/Calinski_Harabasz', calinski, epoch)
         writer.add_scalar('Metrics/Davies_Bouldin', davies, epoch)
@@ -232,3 +266,4 @@ def train():
 
 if __name__ == '__main__':
     train()
+# Test set | Silhouette: 0.8839 | Calinski: 147628.02 | Davies: 0.1402 0.8
